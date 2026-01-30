@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# clive-session: Launch Claude Code with a side-by-side flow diagram viewer
+# Usage: clive-session [flow-file]
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLIVE_CLI="$SCRIPT_DIR/../packages/cli/dist/index.js"
+CLIVE_CONTEXT="$SCRIPT_DIR/clive-context.md"
+
+# Ensure Clive context is available in this project's CLAUDE.md
+if [ -f "$CLIVE_CONTEXT" ]; then
+    mkdir -p .claude
+    if [ ! -f ".claude/CLAUDE.md" ]; then
+        cp "$CLIVE_CONTEXT" .claude/CLAUDE.md
+        echo "Created .claude/CLAUDE.md with Clive flow instructions"
+    elif ! grep -q "Clive Flow Visualization" .claude/CLAUDE.md 2>/dev/null; then
+        echo "" >> .claude/CLAUDE.md
+        cat "$CLIVE_CONTEXT" >> .claude/CLAUDE.md
+        echo "Added Clive flow instructions to .claude/CLAUDE.md"
+    fi
+fi
+
+# Check for tmux
+if ! command -v tmux &> /dev/null; then
+    echo "Error: tmux is required but not installed."
+    echo ""
+    echo "Install with:"
+    echo "  macOS:  brew install tmux"
+    echo "  Ubuntu: sudo apt install tmux"
+    echo "  Fedora: sudo dnf install tmux"
+    exit 1
+fi
+
+# Session name
+SESSION_NAME="clive-$(basename "$(pwd)")"
+
+# Kill existing session if it exists
+tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
+
+# Create new tmux session with Claude Code on the left
+tmux new-session -d -s "$SESSION_NAME" -x "$(tput cols)" -y "$(tput lines)"
+
+# Configure tmux for smooth scrolling in this session
+tmux set-option -t "$SESSION_NAME" -g mouse on
+tmux set-option -t "$SESSION_NAME" -g history-limit 50000
+tmux set-option -t "$SESSION_NAME" -g terminal-overrides 'xterm*:smcup@:rmcup@'
+
+# Split window horizontally (left: claude, right: clive)
+tmux split-window -h -t "$SESSION_NAME"
+
+# Set up left pane (pane 0): Claude Code
+tmux send-keys -t "$SESSION_NAME:0.0" "claude" Enter
+
+# Set up right pane (pane 1): Clive auto-watch
+if [ -n "$1" ]; then
+    # Specific file provided
+    FLOW_FILE="$1"
+    if [ ! -f "$FLOW_FILE" ]; then
+        echo "Warning: Flow file not found: $FLOW_FILE (will use auto-detect)"
+        tmux send-keys -t "$SESSION_NAME:0.1" "node $CLIVE_CLI auto" Enter
+    else
+        FLOW_FILE_ABS="$(cd "$(dirname "$FLOW_FILE")" && pwd)/$(basename "$FLOW_FILE")"
+        tmux send-keys -t "$SESSION_NAME:0.1" "node $CLIVE_CLI watch '$FLOW_FILE_ABS'" Enter
+    fi
+else
+    # No file - use auto-detect mode
+    tmux send-keys -t "$SESSION_NAME:0.1" "node $CLIVE_CLI auto" Enter
+fi
+
+# Resize panes (60% left for Claude, 40% right for diagram)
+tmux resize-pane -t "$SESSION_NAME:0.0" -x "60%"
+
+# Select the left pane (Claude Code) as active
+tmux select-pane -t "$SESSION_NAME:0.0"
+
+# Attach to the session
+tmux attach -t "$SESSION_NAME"

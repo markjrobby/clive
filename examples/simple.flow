@@ -1,0 +1,23 @@
+meta:
+  name: Simple Flow
+  version: 1.0.0
+  description: A minimal example flow
+
+nodes:
+  start:
+    name: Start
+    type: entry
+    copy:
+      heading: "Welcome!"
+      body: "This is a simple flow example."
+    buttons:
+      - label: "Begin"
+        goto: complete
+        style: primary
+
+  complete:
+    name: Done
+    type: exit
+    copy:
+      heading: "All done!"
+      body: "You've completed the flow."

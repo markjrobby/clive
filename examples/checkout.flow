@@ -1,0 +1,281 @@
+meta:
+  name: Checkout Flow
+  version: 1.0.0
+  description: Simple e-commerce checkout with cart, payment, and confirmation
+  owner: "@markjrobert"
+  tags:
+    - checkout
+    - e-commerce
+    - payment
+
+config:
+  layout: vertical
+  theme: default
+
+nodes:
+  view_cart:
+    name: View Cart
+    type: entry
+    handler: src/handlers/checkout.py:view_cart
+    copy:
+      heading: "Your Shopping Cart"
+      body: "Review your items before checkout."
+    buttons:
+      - label: "Proceed to Checkout"
+        goto: enter_email
+        style: primary
+      - label: "Continue Shopping"
+        goto: exit_shopping
+        style: secondary
+    state:
+      requires:
+        - cart_has_items
+
+  exit_shopping:
+    name: Continue Shopping
+    type: exit
+    copy:
+      heading: "Back to Store"
+      body: "Redirecting you to continue shopping..."
+
+  enter_email:
+    name: Enter Email
+    type: input
+    handler: src/handlers/checkout.py:enter_email
+    copy:
+      heading: "Contact Information"
+      body: "We'll send your order confirmation here."
+      placeholder: "you@example.com"
+    validation:
+      - type: pattern
+        pattern: "^[^@]+@[^@]+\\.[^@]+$"
+        error: "Please enter a valid email address"
+    transitions:
+      - to: enter_shipping
+        trigger: valid_input
+      - to: email_error
+        trigger: invalid_input
+    state:
+      sets:
+        - email_provided
+
+  email_error:
+    name: Email Error
+    type: error
+    parent: enter_email
+    copy:
+      body: "Please enter a valid email address"
+    transitions:
+      - to: enter_email
+        trigger: retry
+
+  enter_shipping:
+    name: Shipping Address
+    type: input
+    handler: src/handlers/checkout.py:enter_shipping
+    copy:
+      heading: "Shipping Address"
+      body: "Where should we send your order?"
+      placeholder: "123 Main St, City, State, ZIP"
+    validation:
+      - type: min_length
+        value: 10
+        error: "Please enter a complete address"
+    transitions:
+      - to: select_shipping_method
+        trigger: valid_input
+      - to: shipping_error
+        trigger: invalid_input
+    state:
+      sets:
+        - shipping_address_provided
+
+  shipping_error:
+    name: Shipping Error
+    type: error
+    parent: enter_shipping
+    copy:
+      body: "Please enter a complete shipping address"
+    transitions:
+      - to: enter_shipping
+        trigger: retry
+
+  select_shipping_method:
+    name: Shipping Method
+    type: decision
+    handler: src/handlers/checkout.py:select_shipping
+    copy:
+      heading: "Choose Shipping Speed"
+      body: "How fast do you need your items?"
+    buttons:
+      - label: "Standard (5-7 days) - Free"
+        goto: payment_method
+        data: { shipping: "standard", cost: 0 }
+      - label: "Express (2-3 days) - $9.99"
+        goto: payment_method
+        data: { shipping: "express", cost: 9.99 }
+      - label: "Overnight (1 day) - $24.99"
+        goto: payment_method
+        data: { shipping: "overnight", cost: 24.99 }
+    state:
+      sets:
+        - shipping_method_selected
+
+  payment_method:
+    name: Payment Method
+    type: decision
+    handler: src/handlers/checkout.py:select_payment
+    copy:
+      heading: "How would you like to pay?"
+    buttons:
+      - label: "Credit/Debit Card"
+        goto: enter_card
+        data: { payment_type: "card" }
+      - label: "PayPal"
+        goto: paypal_redirect
+        data: { payment_type: "paypal" }
+      - label: "Apple Pay"
+        goto: process_payment
+        data: { payment_type: "apple_pay" }
+
+  enter_card:
+    name: Card Details
+    type: input
+    handler: src/handlers/checkout.py:enter_card
+    copy:
+      heading: "Enter Card Details"
+      body: "Your payment information is secure and encrypted."
+      placeholder: "Card number, expiry, CVV"
+    validation:
+      - type: min_length
+        value: 13
+        error: "Please enter valid card details"
+    transitions:
+      - to: review_order
+        trigger: valid_input
+      - to: card_error
+        trigger: invalid_input
+    state:
+      sets:
+        - payment_info_provided
+
+  card_error:
+    name: Card Error
+    type: error
+    parent: enter_card
+    copy:
+      body: "Invalid card details. Please check and try again."
+    transitions:
+      - to: enter_card
+        trigger: retry
+
+  paypal_redirect:
+    name: PayPal
+    type: action
+    handler: src/handlers/checkout.py:paypal_redirect
+    copy:
+      heading: "Redirecting to PayPal"
+      body: "You'll be redirected to PayPal to complete your payment."
+    buttons:
+      - label: "Continue to PayPal"
+        goto: review_order
+        style: primary
+      - label: "Choose Different Method"
+        goto: payment_method
+        style: secondary
+    state:
+      sets:
+        - payment_info_provided
+
+  review_order:
+    name: Review Order
+    type: action
+    handler: src/handlers/checkout.py:review_order
+    copy:
+      heading: "Review Your Order"
+      body: "Email: {email}\nShipping: {shipping_address}\nMethod: {shipping_method}\nTotal: {total}"
+    buttons:
+      - label: "Place Order"
+        goto: process_payment
+        style: primary
+      - label: "Edit Order"
+        goto: view_cart
+        style: secondary
+    state:
+      requires:
+        - email_provided
+        - shipping_address_provided
+        - payment_info_provided
+
+  process_payment:
+    name: Processing Payment
+    type: action
+    handler: src/handlers/checkout.py:process_payment
+    copy:
+      heading: "Processing Your Payment"
+      body: "Please wait while we securely process your payment..."
+    transitions:
+      - to: confirmation
+        trigger: payment_success
+      - to: payment_failed
+        trigger: payment_failed
+    state:
+      sets:
+        - payment_processing
+
+  payment_failed:
+    name: Payment Failed
+    type: error
+    parent: process_payment
+    copy:
+      heading: "Payment Failed"
+      body: "We couldn't process your payment. Please try again or use a different payment method."
+    buttons:
+      - label: "Try Again"
+        goto: payment_method
+        style: primary
+      - label: "Contact Support"
+        goto: support_exit
+        style: secondary
+    state:
+      clears:
+        - payment_processing
+
+  support_exit:
+    name: Contact Support
+    type: exit
+    copy:
+      heading: "Contact Support"
+      body: "Redirecting to customer support..."
+
+  confirmation:
+    name: Order Confirmed
+    type: action
+    handler: src/handlers/checkout.py:confirmation
+    copy:
+      heading: "Order Confirmed!"
+      body: "Thank you for your purchase. Order #{order_id}\n\nA confirmation email has been sent to {email}."
+    buttons:
+      - label: "Track Order"
+        goto: complete
+        style: primary
+      - label: "Continue Shopping"
+        goto: exit_shopping
+        style: secondary
+    state:
+      sets:
+        - order_confirmed
+      clears:
+        - cart_has_items
+        - payment_processing
+
+  complete:
+    name: Checkout Complete
+    type: exit
+    handler: src/handlers/checkout.py:complete
+    copy:
+      heading: "Thanks for Shopping!"
+      body: "Your order is on its way. You can track it anytime."
+    state:
+      sets:
+        - checkout_complete

@@ -1,0 +1,24 @@
+{
+  "name": "clive-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Flow visualization for Claude Code CLI - Miro in the terminal",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "setup": "pnpm install && pnpm build && npm install -g ./packages/cli"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}

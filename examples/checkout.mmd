@@ -1,0 +1,5 @@
+flowchart TD
+    cart[Cart] --> payment[Payment]
+    payment --> confirmation[Order Confirmed!]
+    payment --> error[Payment Failed]
+    error --> payment
