@@ -28,7 +28,7 @@ Clive runs side-by-side with Claude Code, rendering Mermaid flowcharts as ASCII 
 ## Setup
 
 ```bash
-git clone https://github.com/your-org/clive.git
+git clone https://github.com/markjrobby/clive.git
 cd clive
 pnpm setup
 ```
